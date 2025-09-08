@@ -3,7 +3,7 @@ import sqlite3
 import hashlib
 from datetime import datetime
 import os
-from streamlit.runtime.scriptrunner import RerunException  # Correct import
+from streamlit.runtime.scriptrunner import RerunException
 
 st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
 st.title("📱 Private Messaging System (Database Version)")
@@ -127,10 +127,20 @@ if "user" not in st.session_state:
     st.session_state.user = None
 if "selected_contact" not in st.session_state:
     st.session_state.selected_contact = None
+if "rerun" not in st.session_state:
+    st.session_state.rerun = False
+
+def do_rerun():
+    st.session_state.rerun = True
+
+if st.session_state.rerun:
+    st.session_state.rerun = False
+    raise RerunException
 
 # Authentication
 if st.session_state.user is None:
     login_tab, register_tab = st.tabs(["Login", "Register"])
+    
     with login_tab:
         st.subheader("👤 Login")
         username = st.text_input("Username", key="login_username")
@@ -140,12 +150,10 @@ if st.session_state.user is None:
             if user:
                 st.session_state.user = user
                 st.success(f"Welcome back, {username}!")
-                try:
-                    st.experimental_rerun()
-                except RerunException:
-                    pass
+                do_rerun()
             else:
                 st.error("Invalid username or password")
+    
     with register_tab:
         st.subheader("👤 Register")
         new_username = st.text_input("Choose Username", key="reg_username")
@@ -171,17 +179,11 @@ else:
         for contact_id, contact_username in contacts:
             if st.button(f"💬 {contact_username}", key=f"contact_{contact_id}"):
                 st.session_state.selected_contact = {"id": contact_id, "username": contact_username}
-                try:
-                    st.experimental_rerun()
-                except RerunException:
-                    pass
+                do_rerun()
         if st.button("🚪 Logout"):
             st.session_state.user = None
             st.session_state.selected_contact = None
-            try:
-                st.experimental_rerun()
-            except RerunException:
-                pass
+            do_rerun()
     with col2:
         if st.session_state.selected_contact:
             contact = st.session_state.selected_contact
@@ -201,10 +203,7 @@ else:
             new_message = st.chat_input(f"Type a message to {contact['username']}...")
             if new_message:
                 send_message(st.session_state.user["id"], contact["id"], new_message)
-                try:
-                    st.experimental_rerun()
-                except RerunException:
-                    pass
+                do_rerun()
         else:
             st.info("👈 Select a contact to start chatting!")
             st.subheader("💬 Welcome to the Messaging System!")
@@ -216,7 +215,4 @@ else:
             """)
     if st.session_state.user and st.session_state.selected_contact:
         if st.button("🔄 Refresh Messages"):
-            try:
-                st.experimental_rerun()
-            except RerunException:
-                pass
+            do_rerun()
