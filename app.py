@@ -142,7 +142,7 @@ if st.session_state.user is None:
                 try:
                     st.experimental_rerun()
                 except st.script_runner.RerunException:
-                    return
+                    pass
             else:
                 st.error("Invalid username or password")
     with register_tab:
@@ -173,14 +173,14 @@ else:
                 try:
                     st.experimental_rerun()
                 except st.script_runner.RerunException:
-                    return
+                    pass
         if st.button("🚪 Logout"):
             st.session_state.user = None
             st.session_state.selected_contact = None
             try:
                 st.experimental_rerun()
             except st.script_runner.RerunException:
-                return
+                pass
     with col2:
         if st.session_state.selected_contact:
             contact = st.session_state.selected_contact
@@ -203,7 +203,7 @@ else:
                 try:
                     st.experimental_rerun()
                 except st.script_runner.RerunException:
-                    return
+                    pass
         else:
             st.info("👈 Select a contact to start chatting!")
             st.subheader("💬 Welcome to the Messaging System!")
@@ -213,10 +213,9 @@ else:
                 - User authentication and registration  
                 - Real-time message updates with refresh  
             """)
-    
     if st.session_state.user and st.session_state.selected_contact:
         if st.button("🔄 Refresh Messages"):
             try:
                 st.experimental_rerun()
             except st.script_runner.RerunException:
-                return
+                pass
