@@ -8,12 +8,24 @@ from streamlit.runtime.scriptrunner import RerunException
 st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
 st.title("📱 Private Messaging System (Database Version)")
 
+# Inject CSS to hide Streamlit header, footer, and hamburger menu with GitHub link
+hide_streamlit_style = """
+    <style>
+    /* Hide top header */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    /* Hide footer */
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 DB_PATH = os.path.join(st.secrets.get("db_path", "."), "messaging_app.db")
 
 def init_database():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +35,7 @@ def init_database():
             last_seen TIMESTAMP
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,12 +48,12 @@ def init_database():
             FOREIGN KEY (recipient_id) REFERENCES users(id)
         )
     """)
-    
+
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_users 
         ON messages (sender_id, recipient_id, timestamp)
     """)
-    
+
     conn.commit()
     conn.close()
 
@@ -140,7 +152,7 @@ if st.session_state.rerun:
 # Authentication
 if st.session_state.user is None:
     login_tab, register_tab = st.tabs(["Login", "Register"])
-    
+
     with login_tab:
         st.subheader("👤 Login")
         username = st.text_input("Username", key="login_username")
@@ -149,11 +161,12 @@ if st.session_state.user is None:
             user = authenticate_user(username, password)
             if user:
                 st.session_state.user = user
+                st.session_state.selected_contact = None  # Reset selected contact on login
                 st.success(f"Welcome back, {username}!")
                 do_rerun()
             else:
                 st.error("Invalid username or password")
-    
+
     with register_tab:
         st.subheader("👤 Register")
         new_username = st.text_input("Choose Username", key="reg_username")
@@ -185,7 +198,9 @@ else:
             st.session_state.selected_contact = None
             do_rerun()
     with col2:
-        if st.session_state.selected_contact:
+        if st.session_state.selected_contact is None:
+            st.info("👈 Please select a contact from the left to start chatting.")
+        else:
             contact = st.session_state.selected_contact
             st.subheader(f"💬 Chat with {contact['username']}")
             conversation = get_conversation(st.session_state.user["id"], contact["id"])
@@ -204,15 +219,6 @@ else:
             if new_message:
                 send_message(st.session_state.user["id"], contact["id"], new_message)
                 do_rerun()
-        else:
-            st.info("👈 Select a contact to start chatting!")
-            st.subheader("💬 Welcome to the Messaging System!")
-            st.write("""
-                - Private messaging between users  
-                - Message persistence with SQLite database  
-                - User authentication and registration  
-                - Real-time message updates with refresh  
-            """)
     if st.session_state.user and st.session_state.selected_contact:
         if st.button("🔄 Refresh Messages"):
             do_rerun()
