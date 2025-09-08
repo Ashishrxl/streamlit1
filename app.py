@@ -6,7 +6,7 @@ import os
 from streamlit.runtime.scriptrunner import RerunException
 
 st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
-st.title("📱 Private Messaging System (Database Version)")
+st.title("📱 Private Messaging System ")
 
 # Inject CSS to hide Streamlit header, footer, and hamburger menu with GitHub link
 hide_streamlit_style = """
