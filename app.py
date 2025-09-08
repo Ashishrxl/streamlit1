@@ -3,6 +3,7 @@ import sqlite3
 import hashlib
 from datetime import datetime
 import os
+from streamlit.runtime.scriptrunner import RerunException  # Correct import
 
 st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
 st.title("📱 Private Messaging System (Database Version)")
@@ -141,7 +142,7 @@ if st.session_state.user is None:
                 st.success(f"Welcome back, {username}!")
                 try:
                     st.experimental_rerun()
-                except st.script_runner.RerunException:
+                except RerunException:
                     pass
             else:
                 st.error("Invalid username or password")
@@ -172,14 +173,14 @@ else:
                 st.session_state.selected_contact = {"id": contact_id, "username": contact_username}
                 try:
                     st.experimental_rerun()
-                except st.script_runner.RerunException:
+                except RerunException:
                     pass
         if st.button("🚪 Logout"):
             st.session_state.user = None
             st.session_state.selected_contact = None
             try:
                 st.experimental_rerun()
-            except st.script_runner.RerunException:
+            except RerunException:
                 pass
     with col2:
         if st.session_state.selected_contact:
@@ -202,7 +203,7 @@ else:
                 send_message(st.session_state.user["id"], contact["id"], new_message)
                 try:
                     st.experimental_rerun()
-                except st.script_runner.RerunException:
+                except RerunException:
                     pass
         else:
             st.info("👈 Select a contact to start chatting!")
@@ -217,5 +218,5 @@ else:
         if st.button("🔄 Refresh Messages"):
             try:
                 st.experimental_rerun()
-            except st.script_runner.RerunException:
+            except RerunException:
                 pass
