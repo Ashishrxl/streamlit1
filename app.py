@@ -7,7 +7,6 @@ import os
 st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
 st.title("📱 Private Messaging System (Database Version)")
 
-# Use Streamlit Cloud's persistent storage path for DB
 DB_PATH = os.path.join(st.secrets.get("db_path", "."), "messaging_app.db")
 
 def init_database():
@@ -120,7 +119,6 @@ def get_conversation(user1_id, user2_id):
     conn.close()
     return result
 
-# Initialize database on startup
 if not os.path.exists(DB_PATH):
     init_database()
 
@@ -141,7 +139,10 @@ if st.session_state.user is None:
             if user:
                 st.session_state.user = user
                 st.success(f"Welcome back, {username}!")
-                st.experimental_rerun()
+                try:
+                    st.experimental_rerun()
+                except st.script_runner.RerunException:
+                    return
             else:
                 st.error("Invalid username or password")
     with register_tab:
@@ -169,11 +170,17 @@ else:
         for contact_id, contact_username in contacts:
             if st.button(f"💬 {contact_username}", key=f"contact_{contact_id}"):
                 st.session_state.selected_contact = {"id": contact_id, "username": contact_username}
-                st.experimental_rerun()
+                try:
+                    st.experimental_rerun()
+                except st.script_runner.RerunException:
+                    return
         if st.button("🚪 Logout"):
             st.session_state.user = None
             st.session_state.selected_contact = None
-            st.experimental_rerun()
+            try:
+                st.experimental_rerun()
+            except st.script_runner.RerunException:
+                return
     with col2:
         if st.session_state.selected_contact:
             contact = st.session_state.selected_contact
@@ -193,7 +200,10 @@ else:
             new_message = st.chat_input(f"Type a message to {contact['username']}...")
             if new_message:
                 send_message(st.session_state.user["id"], contact["id"], new_message)
-                st.experimental_rerun()
+                try:
+                    st.experimental_rerun()
+                except st.script_runner.RerunException:
+                    return
         else:
             st.info("👈 Select a contact to start chatting!")
             st.subheader("💬 Welcome to the Messaging System!")
@@ -203,7 +213,10 @@ else:
                 - User authentication and registration  
                 - Real-time message updates with refresh  
             """)
+    
     if st.session_state.user and st.session_state.selected_contact:
         if st.button("🔄 Refresh Messages"):
-            st.experimental_rerun()
-          
+            try:
+                st.experimental_rerun()
+            except st.script_runner.RerunException:
+                return
