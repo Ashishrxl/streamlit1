@@ -3,6 +3,17 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
+# --- CSS to hide the footer and header links ---
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# ---------------------------------------------
+
 # Configure Gemini using Streamlit secrets
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -50,9 +61,6 @@ class CSVAgent:
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
 
-            # Fix: Use a more direct and explicit follow-up prompt.
-            # This ensures the model understands the tool has been run and it should now
-            # provide a final answer based on the output, not ask for the data again.
             follow_up_prompt = f"""
             The command `{command}` was executed on the dataframe and returned the following output:
             
@@ -94,4 +102,6 @@ if uploaded_file:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 Gemini Answer")
         st.write(reply)
+
+
 
