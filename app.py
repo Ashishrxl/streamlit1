@@ -16,7 +16,6 @@ MODEL = "gemini-1.5-flash"
 def run_pandas(df: pd.DataFrame, command: str) -> str:
     """Execute a pandas command safely on the dataframe."""
     try:
-        # Use a restricted namespace to prevent dangerous code execution
         allowed_locals = {"df": df, "pd": pd}
         result = eval(command, {"__builtins__": {}}, allowed_locals)
         if isinstance(result, (pd.DataFrame, pd.Series)):
@@ -51,14 +50,17 @@ class CSVAgent:
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
 
+            # Fix: Use a more direct and explicit follow-up prompt.
+            # This ensures the model understands the tool has been run and it should now
+            # provide a final answer based on the output, not ask for the data again.
             follow_up_prompt = f"""
-            The command `{command}` returned the following output:
+            The command `{command}` was executed on the dataframe and returned the following output:
             
             ```
             {tool_result}
             ```
             
-            Based on this, provide a concise, natural language answer to the user's original question.
+            Based on this, provide a concise, natural language answer to the user's original question. Do not ask for the dataframe again.
             """
             
             follow_up_history = self.history + [{"role": "user", "parts": [follow_up_prompt]}]
