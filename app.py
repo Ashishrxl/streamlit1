@@ -1,224 +1,89 @@
-import streamlit as st
-import sqlite3
-import hashlib
-from datetime import datetime
 import os
-from streamlit.runtime.scriptrunner import RerunException
+import streamlit as st
+import pandas as pd
+import google.generativeai as genai
 
-st.set_page_config(page_title="Private Messaging App - Database", layout="wide")
-st.title("📱 Private Messaging System ")
+# 1. Configure Gemini
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+MODEL = "gemini-1.5-flash"
 
-# Inject CSS to hide Streamlit header, footer, and hamburger menu with GitHub link
-hide_streamlit_style = """
-    <style>
-    /* Hide top header */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    /* Hide footer */
-    footer {visibility: hidden;}
-    </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-DB_PATH = os.path.join(st.secrets.get("db_path", "."), "messaging_app.db")
-
-def init_database():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_seen TIMESTAMP
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id INTEGER NOT NULL,
-            recipient_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            read_status BOOLEAN DEFAULT FALSE,
-            FOREIGN KEY (sender_id) REFERENCES users(id),
-            FOREIGN KEY (recipient_id) REFERENCES users(id)
-        )
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_messages_users 
-        ON messages (sender_id, recipient_id, timestamp)
-    """)
-
-    conn.commit()
-    conn.close()
-
-def get_connection():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def create_user(username, password):
+# ---- Tool: Pandas executor ----
+def run_pandas(df: pd.DataFrame, command: str) -> str:
+    """
+    Execute a pandas command safely on the dataframe.
+    Example command: df['column'].mean()
+    """
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        password_hash = hash_password(password)
-        cursor.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            (username, password_hash)
-        )
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
+        # Restrict globals for safety
+        allowed_locals = {"df": df, "pd": pd}
+        result = eval(command, {"__builtins__": {}}, allowed_locals)
 
-def authenticate_user(username, password):
-    conn = get_connection()
-    cursor = conn.cursor()
-    password_hash = hash_password(password)
-    cursor.execute(
-        "SELECT id, username FROM users WHERE username = ? AND password_hash = ?",
-        (username, password_hash)
-    )
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return {"id": result[0], "username": result[1]}
-    return None
+        # Convert result nicely
+        if isinstance(result, (pd.DataFrame, pd.Series)):
+            return result.to_string()
+        return str(result)
+    except Exception as e:
+        return f"Error running command: {e}"
 
-def get_all_users(exclude_user_id=None):
-    conn = get_connection()
-    cursor = conn.cursor()
-    if exclude_user_id:
-        cursor.execute(
-            "SELECT id, username FROM users WHERE id != ? ORDER BY username",
-            (exclude_user_id,)
-        )
-    else:
-        cursor.execute("SELECT id, username FROM users ORDER BY username")
-    result = cursor.fetchall()
-    conn.close()
-    return result
+# ---- Agent ----
+class CSVAgent:
+    def __init__(self, model_name=MODEL):
+        self.model = genai.GenerativeModel(model_name)
+        self.history = []
 
-def send_message(sender_id, recipient_id, content):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO messages (sender_id, recipient_id, content) VALUES (?, ?, ?)",
-        (sender_id, recipient_id, content)
-    )
-    conn.commit()
-    conn.close()
+    def ask(self, user_input: str, df: pd.DataFrame) -> str:
+        # Add user input
+        self.history.append({"role": "user", "parts": [user_input]})
 
-def get_conversation(user1_id, user2_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT m.content, m.timestamp, u1.username as sender, m.sender_id
-        FROM messages m
-        JOIN users u1 ON m.sender_id = u1.id
-        WHERE (m.sender_id = ? AND m.recipient_id = ?) 
-           OR (m.sender_id = ? AND m.recipient_id = ?)
-        ORDER BY m.timestamp ASC
-    """, (user1_id, user2_id, user2_id, user1_id))
-    result = cursor.fetchall()
-    conn.close()
-    return result
+        # System-style instruction
+        system_prompt = """
+        You are a data analysis assistant. 
+        You can answer directly in natural language OR suggest Python pandas commands 
+        to run on the dataframe 'df'. 
+        If you want me to run code, write it as: code: <pandas_expression>
+        Example: code: df['Age'].mean()
+        """
 
-if not os.path.exists(DB_PATH):
-    init_database()
+        # Combine system + history
+        full_input = [{"role": "user", "parts": [system_prompt]}] + self.history
 
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "selected_contact" not in st.session_state:
-    st.session_state.selected_contact = None
-if "rerun" not in st.session_state:
-    st.session_state.rerun = False
+        # Get Gemini response
+        response = self.model.generate_content(full_input)
+        text = response.text.strip()
 
-def do_rerun():
-    st.session_state.rerun = True
+        # If Gemini suggests code, run it
+        if text.lower().startswith("code:"):
+            command = text[5:].strip()
+            tool_result = run_pandas(df, command)
 
-if st.session_state.rerun:
-    st.session_state.rerun = False
-    raise RerunException
+            # Add tool result back
+            self.history.append({"role": "tool", "parts": [f"Result: {tool_result}"]})
 
-# Authentication
-if st.session_state.user is None:
-    login_tab, register_tab = st.tabs(["Login", "Register"])
+            # Ask Gemini to explain the result
+            follow_up = self.model.generate_content(self.history)
+            self.history.append({"role": "model", "parts": [follow_up.text]})
+            return f"Ran `{command}`\n\n{follow_up.text}"
 
-    with login_tab:
-        st.subheader("👤 Login")
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
-        if st.button("Login"):
-            user = authenticate_user(username, password)
-            if user:
-                st.session_state.user = user
-                st.session_state.selected_contact = None  # Reset selected contact on login
-                st.success(f"Welcome back, {username}!")
-                do_rerun()
-            else:
-                st.error("Invalid username or password")
+        # Normal text answer
+        self.history.append({"role": "model", "parts": [text]})
+        return text
 
-    with register_tab:
-        st.subheader("👤 Register")
-        new_username = st.text_input("Choose Username", key="reg_username")
-        new_password = st.text_input("Choose Password", type="password", key="reg_password")
-        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
-        if st.button("Register"):
-            if new_password != confirm_password:
-                st.error("Passwords don't match")
-            elif len(new_password) < 6:
-                st.error("Password must be at least 6 characters")
-            elif len(new_username) < 3:
-                st.error("Username must be at least 3 characters")
-            else:
-                if create_user(new_username, new_password):
-                    st.success("Account created successfully! Please login.")
-                else:
-                    st.error("Username already exists")
-else:
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.subheader("👥 Contacts")
-        contacts = get_all_users(exclude_user_id=st.session_state.user["id"])
-        for contact_id, contact_username in contacts:
-            if st.button(f"💬 {contact_username}", key=f"contact_{contact_id}"):
-                st.session_state.selected_contact = {"id": contact_id, "username": contact_username}
-                do_rerun()
-        if st.button("🚪 Logout"):
-            st.session_state.user = None
-            st.session_state.selected_contact = None
-            do_rerun()
-    with col2:
-        if st.session_state.selected_contact is None:
-            st.info("👈 Please select a contact from the left to start chatting.")
-        else:
-            contact = st.session_state.selected_contact
-            st.subheader(f"💬 Chat with {contact['username']}")
-            conversation = get_conversation(st.session_state.user["id"], contact["id"])
-            chat_container = st.container()
-            with chat_container:
-                for content, timestamp, sender_username, sender_id in conversation:
-                    if sender_id == st.session_state.user["id"]:
-                        with st.chat_message("user"):
-                            st.write(content)
-                            st.caption(f"Sent: {timestamp}")
-                    else:
-                        with st.chat_message("assistant"):
-                            st.write(content)
-                            st.caption(f"Received: {timestamp}")
-            new_message = st.chat_input(f"Type a message to {contact['username']}...")
-            if new_message:
-                send_message(st.session_state.user["id"], contact["id"], new_message)
-                do_rerun()
-    if st.session_state.user and st.session_state.selected_contact:
-        if st.button("🔄 Refresh Messages"):
-            do_rerun()
+# ---- Streamlit UI ----
+st.title("📊 Gemini CSV Agent with Pandas Tools")
+
+uploaded_file = st.file_uploader("Upload your CSV", type="csv")
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("✅ File loaded! Here's a preview:")
+    st.dataframe(df.head())
+
+    if "agent" not in st.session_state:
+        st.session_state.agent = CSVAgent()
+
+    query = st.text_input("Ask a question about your CSV:")
+
+    if query:
+        reply = st.session_state.agent.ask(query, df)
+        st.subheader("🤖 Gemini Answer")
+        st.write(reply)
