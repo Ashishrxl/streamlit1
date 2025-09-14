@@ -1,11 +1,15 @@
-# Updated full code to copy and paste.
 import os
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# Configure Gemini
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+# Configure Gemini using Streamlit secrets
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except KeyError:
+    st.error("Please set your Gemini API key in `secrets.toml`.")
+    st.stop()
+
 MODEL = "gemini-1.5-flash"
 
 # ---- Tool: Pandas executor ----
@@ -71,5 +75,3 @@ if uploaded_file:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 Gemini Answer")
         st.write(reply)
-
-
