@@ -18,7 +18,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except KeyError:
-    st.error("Please set your Gemini API key in `secrets.toml`.")
+    st.error("no api keys")
     st.stop()
 
 MODEL = "gemini-1.5-flash"
