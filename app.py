@@ -1,33 +1,27 @@
 import sys
 import subprocess
 
-# Ensure the bad 'google' package is removed and the right one is installed
+# --- FIX for Streamlit Cloud ---
+# Uninstall the conflicting "google" package and ensure google-generativeai is installed
 subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "google"], check=False)
 subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "google-generativeai"], check=False)
 
-
-
+# Now safe to import
 import os
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# 1. Configure Gemini
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# Configure Gemini
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 MODEL = "gemini-1.5-flash"
 
 # ---- Tool: Pandas executor ----
 def run_pandas(df: pd.DataFrame, command: str) -> str:
-    """
-    Execute a pandas command safely on the dataframe.
-    Example command: df['column'].mean()
-    """
+    """Execute a pandas command safely on the dataframe."""
     try:
-        # Restrict globals for safety
         allowed_locals = {"df": df, "pd": pd}
         result = eval(command, {"__builtins__": {}}, allowed_locals)
-
-        # Convert result nicely
         if isinstance(result, (pd.DataFrame, pd.Series)):
             return result.to_string()
         return str(result)
@@ -41,39 +35,28 @@ class CSVAgent:
         self.history = []
 
     def ask(self, user_input: str, df: pd.DataFrame) -> str:
-        # Add user input
         self.history.append({"role": "user", "parts": [user_input]})
 
-        # System-style instruction
         system_prompt = """
-        You are a data analysis assistant. 
-        You can answer directly in natural language OR suggest Python pandas commands 
-        to run on the dataframe 'df'. 
+        You are a data analysis assistant.
+        You can answer directly in natural language OR suggest Python pandas commands
+        to run on the dataframe 'df'.
         If you want me to run code, write it as: code: <pandas_expression>
         Example: code: df['Age'].mean()
         """
 
-        # Combine system + history
         full_input = [{"role": "user", "parts": [system_prompt]}] + self.history
-
-        # Get Gemini response
         response = self.model.generate_content(full_input)
         text = response.text.strip()
 
-        # If Gemini suggests code, run it
         if text.lower().startswith("code:"):
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
-
-            # Add tool result back
             self.history.append({"role": "tool", "parts": [f"Result: {tool_result}"]})
-
-            # Ask Gemini to explain the result
             follow_up = self.model.generate_content(self.history)
             self.history.append({"role": "model", "parts": [follow_up.text]})
             return f"Ran `{command}`\n\n{follow_up.text}"
 
-        # Normal text answer
         self.history.append({"role": "model", "parts": [text]})
         return text
 
