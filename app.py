@@ -1,3 +1,12 @@
+import sys
+import subprocess
+
+# Ensure the bad 'google' package is removed and the right one is installed
+subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "google"], check=False)
+subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "google-generativeai"], check=False)
+
+
+
 import os
 import streamlit as st
 import pandas as pd
