@@ -29,11 +29,9 @@ def run_pandas(df: pd.DataFrame, command: str) -> str:
 class CSVAgent:
     def __init__(self, model_name=MODEL):
         self.model = genai.GenerativeModel(model_name)
-        # History is a list of dicts with 'role' and 'parts' keys
         self.history = []
 
     def ask(self, user_input: str, df: pd.DataFrame) -> str:
-        # Add the user's input to the history
         self.history.append({"role": "user", "parts": [user_input]})
 
         system_prompt = """
@@ -53,8 +51,6 @@ class CSVAgent:
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
 
-            # We create a new prompt that includes the tool's result to get a final answer.
-            # We don't add the tool's result to the main history to avoid role errors.
             follow_up_prompt = f"""
             The command `{command}` returned the following output:
             
@@ -65,24 +61,20 @@ class CSVAgent:
             Based on this, provide a concise, natural language answer to the user's original question.
             """
             
-            # Create a temporary history for the follow-up prompt
             follow_up_history = self.history + [{"role": "user", "parts": [follow_up_prompt]}]
             
             follow_up_response = self.model.generate_content(follow_up_history)
             final_response = follow_up_response.text.strip()
             
-            # Add the final model response to the history for future turns
             self.history.append({"role": "model", "parts": [final_response]})
             
             return f"Ran `{command}`\n\n{final_response}"
 
-        # If no code is suggested, just return the direct answer
         self.history.append({"role": "model", "parts": [text]})
         return text
 
 # ---- Streamlit UI ----
-st.title("📊 CSV Agent with Pandas Tools")
-
+st.title("📊 Gemini CSV Agent with Pandas Tools")
 
 uploaded_file = st.file_uploader("Upload your CSV", type="csv")
 
@@ -100,6 +92,4 @@ if uploaded_file:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 Gemini Answer")
         st.write(reply)
-
-
 
