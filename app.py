@@ -1,12 +1,4 @@
-import sys
-import subprocess
-
-# --- FIX for Streamlit Cloud ---
-# Uninstall the conflicting "google" package and ensure google-generativeai is installed
-subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "google"], check=False)
-subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "google-generativeai"], check=False)
-
-# Now safe to import
+# Updated full code to copy and paste.
 import os
 import streamlit as st
 import pandas as pd
@@ -79,3 +71,5 @@ if uploaded_file:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 Gemini Answer")
         st.write(reply)
+
+
