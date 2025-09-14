@@ -16,6 +16,7 @@ MODEL = "gemini-1.5-flash"
 def run_pandas(df: pd.DataFrame, command: str) -> str:
     """Execute a pandas command safely on the dataframe."""
     try:
+        # Use a restricted namespace to prevent dangerous code execution
         allowed_locals = {"df": df, "pd": pd}
         result = eval(command, {"__builtins__": {}}, allowed_locals)
         if isinstance(result, (pd.DataFrame, pd.Series)):
@@ -28,9 +29,11 @@ def run_pandas(df: pd.DataFrame, command: str) -> str:
 class CSVAgent:
     def __init__(self, model_name=MODEL):
         self.model = genai.GenerativeModel(model_name)
+        # History is a list of dicts with 'role' and 'parts' keys
         self.history = []
 
     def ask(self, user_input: str, df: pd.DataFrame) -> str:
+        # Add the user's input to the history
         self.history.append({"role": "user", "parts": [user_input]})
 
         system_prompt = """
@@ -42,22 +45,44 @@ class CSVAgent:
         """
 
         full_input = [{"role": "user", "parts": [system_prompt]}] + self.history
+
         response = self.model.generate_content(full_input)
         text = response.text.strip()
 
         if text.lower().startswith("code:"):
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
-            self.history.append({"role": "tool", "parts": [f"Result: {tool_result}"]})
-            follow_up = self.model.generate_content(self.history)
-            self.history.append({"role": "model", "parts": [follow_up.text]})
-            return f"Ran `{command}`\n\n{follow_up.text}"
 
+            # We create a new prompt that includes the tool's result to get a final answer.
+            # We don't add the tool's result to the main history to avoid role errors.
+            follow_up_prompt = f"""
+            The command `{command}` returned the following output:
+            
+            ```
+            {tool_result}
+            ```
+            
+            Based on this, provide a concise, natural language answer to the user's original question.
+            """
+            
+            # Create a temporary history for the follow-up prompt
+            follow_up_history = self.history + [{"role": "user", "parts": [follow_up_prompt]}]
+            
+            follow_up_response = self.model.generate_content(follow_up_history)
+            final_response = follow_up_response.text.strip()
+            
+            # Add the final model response to the history for future turns
+            self.history.append({"role": "model", "parts": [final_response]})
+            
+            return f"Ran `{command}`\n\n{final_response}"
+
+        # If no code is suggested, just return the direct answer
         self.history.append({"role": "model", "parts": [text]})
         return text
 
 # ---- Streamlit UI ----
-st.title("📊 Gemini CSV Agent with Pandas Tools")
+st.title("📊 CSV Agent with Pandas Tools")
+
 
 uploaded_file = st.file_uploader("Upload your CSV", type="csv")
 
@@ -75,3 +100,6 @@ if uploaded_file:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 Gemini Answer")
         st.write(reply)
+
+
+
