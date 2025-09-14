@@ -84,7 +84,7 @@ class CSVAgent:
         return text
 
 # ---- Streamlit UI ----
-st.title("📊 Gemini CSV Agent with Pandas Tools")
+st.title("📊 CSV Agent with Pandas Tools")
 
 uploaded_file = st.file_uploader("Upload your CSV", type="csv")
 
