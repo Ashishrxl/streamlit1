@@ -100,7 +100,7 @@ if uploaded_file:
 
     if query:
         reply = st.session_state.agent.ask(query, df)
-        st.subheader("🤖 Gemini Answer")
+        st.subheader("🤖 AI Agent Answer")
         st.write(reply)
 
 
