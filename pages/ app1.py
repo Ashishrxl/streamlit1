@@ -1,34 +1,62 @@
-import streamlit as st
-import google.generativeai as genai
+# To run this code you need to install the following dependencies:
+# pip install google-genai
 
-# ✅ Configure Gemini API
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+import base64
+import mimetypes
+import os
+from google import genai
+from google.genai import types
 
-# App title
-st.title("🖼️ Gemini Image + Text Generator")
 
-# User input
-prompt = st.text_area("Enter your prompt:", "A futuristic city skyline at sunset")
+def save_binary_file(file_name, data):
+    f = open(file_name, "wb")
+    f.write(data)
+    f.close()
+    print(f"File saved to to: {file_name}")
 
-# Button to trigger generation
-if st.button("Generate"):
-    st.write("### Generated Output:")
 
-    # Initialize the model
-    model = "gemini-2.5-flash-image-preview"
-
-    # Stream response
-    response = genai.generate_content(
-        model=model,
-        contents=[prompt],
-        generation_config={"response_modalities": ["IMAGE", "TEXT"]},
+def generate():
+    client = genai.Client(
+        api_key=os.environ.get("GEMINI_API_KEY"),
     )
 
-    # Display each part of the response
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
-            # If it's an image
-            st.image(part.inline_data.data, caption="Generated Image")
-        elif hasattr(part, "text") and part.text:
-            # If it's text
-            st.write(part.text)
+    model = "gemini-2.5-flash-image-preview"
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text="""INSERT_INPUT_HERE"""),
+            ],
+        ),
+    ]
+    generate_content_config = types.GenerateContentConfig(
+        response_modalities=[
+            "IMAGE",
+            "TEXT",
+        ],
+    )
+
+    file_index = 0
+    for chunk in client.models.generate_content_stream(
+        model=model,
+        contents=contents,
+        config=generate_content_config,
+    ):
+        if (
+            chunk.candidates is None
+            or chunk.candidates[0].content is None
+            or chunk.candidates[0].content.parts is None
+        ):
+            continue
+        if chunk.candidates[0].content.parts[0].inline_data and chunk.candidates[0].content.parts[0].inline_data.data:
+            file_name = f"ENTER_FILE_NAME_{file_index}"
+            file_index += 1
+            inline_data = chunk.candidates[0].content.parts[0].inline_data
+            data_buffer = inline_data.data
+            file_extension = mimetypes.guess_extension(inline_data.mime_type)
+            save_binary_file(f"{file_name}{file_extension}", data_buffer)
+        else:
+            print(chunk.text)
+
+if __name__ == "__main__":
+    generate()
