@@ -1,58 +1,40 @@
-import base64
-import mimetypes
-import os
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai import types
 
 
-def save_binary_file(file_name, data):
-    with open(file_name, "wb") as f:
-        f.write(data)
-    print(f"File saved to: {file_name}")
+# ✅ Configure Gemini API
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
+# App title
+st.title("🖼️ Gemini Image + Text Generator")
 
-def generate():
-    # ✅ Correct way to set API key
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+# User input
+prompt = st.text_area("Enter your prompt:", "A futuristic city skyline at sunset")
 
-    model = "gemini-2.5-flash-image-preview"
-    contents = [
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text="""INSERT_INPUT_HERE""")],
-        ),
-    ]
-    generate_content_config = types.GenerateContentConfig(
-        response_modalities=["IMAGE", "TEXT"],
-    )
+# Button to trigger generation
+if st.button("Generate"):
+    st.write("### Generated Output:")
 
     file_index = 0
-    # ✅ Use genai.generate_content_stream instead of client.models.generate_content_stream
+
+    # Stream response
     for chunk in genai.generate_content_stream(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
+        model="gemini-2.5-flash-image-preview",
+        contents=[prompt],
+        generation_config={"response_modalities": ["IMAGE", "TEXT"]},
     ):
-        if (
-            not chunk.candidates
-            or not chunk.candidates[0].content
-            or not chunk.candidates[0].content.parts
-        ):
+        if not chunk.candidates:
             continue
 
         part = chunk.candidates[0].content.parts[0]
 
+        # ✅ If it's an image
         if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
-            file_name = f"generated_file_{file_index}"
             file_index += 1
-            inline_data = part.inline_data
-            data_buffer = inline_data.data
-            file_extension = mimetypes.guess_extension(inline_data.mime_type)
-            save_binary_file(f"{file_name}{file_extension}", data_buffer)
+            image_bytes = part.inline_data.data
+
+            st.image(image_bytes, caption=f"Generated Image {file_index}")
+
+        # ✅ If it's text
         elif hasattr(chunk, "text") and chunk.text:
-            print(chunk.text)
-
-
-if __name__ == "__main__":
-    generate()
+            st.write(chunk.text)
