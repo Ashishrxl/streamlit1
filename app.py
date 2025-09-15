@@ -1,88 +1,66 @@
-import os
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
+st.set_page_config(page_title="My App", page_icon="🌐", initial_sidebar_state="expanded")
 
+# Sidebar navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to:", ["Home", "CSV Agent"])
 
-st.set_page_config(
-    page_title="My App",
-    page_icon="🌐",
-    initial_sidebar_state="expanded"  # ✅ always show sidebar
-)
-st.title("🌐 Welcome to My App")
-st.write("Use the sidebar to navigate between pages.")
+# ---- HOME ----
+if page == "Home":
+    st.title("🌐 Welcome to My App")
+    st.write("Use the sidebar to navigate between pages.")
 
-# --- CSS to hide the footer and header links ---
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# ---- CSV AGENT ----
+elif page == "CSV Agent":
+    st.title("📊 CSV AI Agent")
 
-# Configure Gemini using Streamlit secrets
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except KeyError:
-    st.error("no api keys")
-    st.stop()
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    except KeyError:
+        st.error("No API keys found in Streamlit secrets")
+        st.stop()
 
-MODEL = "gemini-1.5-flash"
+    MODEL = "gemini-1.5-flash"
 
-# ---- Agent ----
-class CSVAgent:
-    def __init__(self, model_name=MODEL):
-        self.model = genai.GenerativeModel(model_name)
-        self.history = []
+    class CSVAgent:
+        def __init__(self, model_name=MODEL):
+            self.model = genai.GenerativeModel(model_name)
+            self.history = []
 
-    def ask(self, user_input: str, df: pd.DataFrame) -> str:
-        # Convert the DataFrame to a string (e.g., CSV format)
-        df_string = df.to_csv(index=False)
-        
-        # Craft a comprehensive prompt including the data
-        full_prompt = f"""
-        You are a data analysis assistant.
-        The following is a dataset in CSV format:
-        
-        {df_string}
-        
-        Based on this data, answer the following question:
-        {user_input}
-        """
-        
-        # Add the crafted prompt to the history
-        self.history.append({"role": "user", "parts": [full_prompt]})
+        def ask(self, user_input: str, df: pd.DataFrame) -> str:
+            df_string = df.to_csv(index=False)
+            full_prompt = f"""
+            You are a data analysis assistant.
+            The following is a dataset in CSV format:
+            
+            {df_string}
+            
+            Based on this data, answer the following question:
+            {user_input}
+            """
+            self.history.append({"role": "user", "parts": [full_prompt]})
+            response = self.model.generate_content(self.history)
+            text = response.text.strip()
+            self.history.append({"role": "model", "parts": [text]})
+            return text
 
-        # Generate content with the full prompt
-        response = self.model.generate_content(self.history)
-        text = response.text.strip()
-        
-        # Append the AI's response to history
-        self.history.append({"role": "model", "parts": [text]})
-        
-        return text
+    uploaded_file = st.file_uploader("Upload your CSV", type="csv")
 
-# ---- Streamlit UI ----
-st.title("📊 CSV AI Agent")
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.write("✅ File loaded! Here's a preview:")
+        st.dataframe(df.head())
 
-uploaded_file = st.file_uploader("Upload your CSV", type="csv")
+        if "agent" not in st.session_state:
+            st.session_state.agent = CSVAgent()
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.write("✅ File loaded! Here's a preview:")
-    st.dataframe(df.head())
+        query = st.text_input("Ask a question about your CSV:")
 
-    if "agent" not in st.session_state:
-        st.session_state.agent = CSVAgent()
-
-    query = st.text_input("Ask a question about your CSV:")
-
-    if query:
-        # Pass the DataFrame directly to the ask method
-        with st.spinner("Analyzing data..."):
-            reply = st.session_state.agent.ask(query, df)
-        st.subheader("🤖 AI Agent Answer")
-        st.write(reply)
+        if query:
+            with st.spinner("Analyzing data..."):
+                reply = st.session_state.agent.ask(query, df)
+            st.subheader("🤖 AI Agent Answer")
+            st.write(reply)
