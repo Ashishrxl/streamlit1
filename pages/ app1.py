@@ -4,7 +4,7 @@
 import base64
 import mimetypes
 import os
-from google import genai
+import google.generativeai as genai
 from google.genai import types
 
 
