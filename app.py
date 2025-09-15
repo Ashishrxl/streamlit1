@@ -56,8 +56,7 @@ custom_page = st.sidebar.radio("Go to:", ["🏠 Home", "📊 CSV AI Agent", "⚙
 # ---- Home ----
 if custom_page == "🏠 Home":
     st.title("🌐 Welcome to My App")
-    st.write("Use this custom menu for special pages, or the default sidebar for pages in `/pages`.")
-
+    
 # ---- CSV AI Agent ----
 elif custom_page == "📊 CSV AI Agent":
     st.title("📊 CSV AI Agent")
