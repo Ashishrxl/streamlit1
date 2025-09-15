@@ -5,8 +5,11 @@ import google.generativeai as genai
 
 
 
-st.set_page_config(page_title="My App", page_icon="🌐")
-
+st.set_page_config(
+    page_title="My App",
+    page_icon="🌐",
+    initial_sidebar_state="expanded"  # ✅ always show sidebar
+)
 st.title("🌐 Welcome to My App")
 st.write("Use the sidebar to navigate between pages.")
 
