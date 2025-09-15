@@ -12,7 +12,6 @@ header {visibility: hidden;}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-# ---------------------------------------------
 
 # Configure Gemini using Streamlit secrets
 try:
@@ -43,65 +42,49 @@ class CSVAgent:
 
     def ask(self, user_input: str, df: pd.DataFrame) -> str:
         self.history.append({"role": "user", "parts": [user_input]})
-
         system_prompt = """
         You are a data analysis assistant.
+        The dataframe 'df' you are working with is a joined table created from three tables: Party, Billdetails, and Bill.
+        The join was performed using the following SQL query:
+        SELECT * FROM Party join (Billdetails join Bill on Billdetails.Billindex= Bill.Bill) on Party.ID=PartyId
         You can answer directly in natural language OR suggest Python pandas commands
         to run on the dataframe 'df'.
         If you want me to run code, write it as: code: <pandas_expression>
         Example: code: df['Age'].mean()
         """
-
         full_input = [{"role": "user", "parts": [system_prompt]}] + self.history
-
         response = self.model.generate_content(full_input)
         text = response.text.strip()
-
         if text.lower().startswith("code:"):
             command = text[5:].strip()
             tool_result = run_pandas(df, command)
-
             follow_up_prompt = f"""
             The command `{command}` was executed on the dataframe and returned the following output:
             
             ```
             {tool_result}
             ```
-            
             Based on this, provide a concise, natural language answer to the user's original question. Do not ask for the dataframe again.
             """
-            
             follow_up_history = self.history + [{"role": "user", "parts": [follow_up_prompt]}]
-            
             follow_up_response = self.model.generate_content(follow_up_history)
             final_response = follow_up_response.text.strip()
-            
             self.history.append({"role": "model", "parts": [final_response]})
-            
             return f"Ran `{command}`\n\n{final_response}"
-
         self.history.append({"role": "model", "parts": [text]})
         return text
 
 # ---- Streamlit UI ----
 st.title("📊 CSV AI Agent")
-
 uploaded_file = st.file_uploader("Upload your CSV", type="csv")
-
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.write("✅ File loaded! Here's a preview:")
     st.dataframe(df.head())
-
     if "agent" not in st.session_state:
         st.session_state.agent = CSVAgent()
-
     query = st.text_input("Ask a question about your CSV:")
-
     if query:
         reply = st.session_state.agent.ask(query, df)
         st.subheader("🤖 AI Agent Answer")
         st.write(reply)
-
-
-
