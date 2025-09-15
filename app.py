@@ -3,6 +3,13 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
+
+
+st.set_page_config(page_title="My App", page_icon="🌐")
+
+st.title("🌐 Welcome to My App")
+st.write("Use the sidebar to navigate between pages.")
+
 # --- CSS to hide the footer and header links ---
 hide_streamlit_style = """
 <style>
